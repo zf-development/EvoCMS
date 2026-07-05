@@ -1,0 +1,17 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+logs/*
+!logs/.gitkeep
+backups/*
+!backups/.gitkeep
+upload/*
+!upload/.gitkeep
+
+config.php
+*.md
+.env
+.env.*
