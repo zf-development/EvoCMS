@@ -15,6 +15,7 @@ has_permission('admin.files', true);
 	}
 
 	function files_tree($dir, $current = '', $dot_files = true) {
+		$current = is_string($current) ? $current : '';
 		$data = '<ul class="collapsible">';
 		$files = glob($dir . DIRECTORY_SEPARATOR . ($dot_files ? '{,.??}*' : '*'), GLOB_BRACE);
 
@@ -59,7 +60,7 @@ has_permission('admin.files', true);
 	}
 
 
-	$file = App::GET('file');
+	$file = App::GET('file', '');
 
 	if ($file) {
 		$file = realpath(ROOT_DIR.DIRECTORY_SEPARATOR.$file);
