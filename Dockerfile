@@ -30,6 +30,9 @@ RUN mkdir -p upload/avatars upload/thumbs logs backups \
     && chown -R www-data:www-data upload logs backups \
     && chmod -R 775 upload logs backups
 
+# Persistent data (survives container rebuilds/redeploys)
+VOLUME ["/var/www/html/upload", "/var/www/html/logs", "/var/www/html/backups"]
+
 EXPOSE 80
 
 ENTRYPOINT ["entrypoint.sh"]

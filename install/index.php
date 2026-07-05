@@ -25,6 +25,61 @@ function post_e($key, $default = null) {
 	return $default;
 }
 
+function process_database_step(array $db_types) {
+	$warning = '';
+
+	if (!isset($_POST['db_type']) || empty($_POST['db_type'])) {
+		if (isset($_POST['db_type_backup']) && !empty($_POST['db_type_backup'])) {
+			$_POST['db_type'] = $_POST['db_type_backup'];
+		} else {
+			$_POST['db_type'] = 'sqlite';
+		}
+	}
+
+	$db_type = strtolower(trim($_POST['db_type']));
+
+	if (!isset($db_types[$db_type])) {
+		return ['warning' => 'Type de base de données invalide: ' . $_POST['db_type'], 'payload' => null];
+	}
+
+	require_once '../includes/Database/db.' . $db_type . '.php';
+
+	$_POST['db_host'] = $_POST['db_host'] ?? '';
+	$_POST['db_user'] = $_POST['db_user'] ?? '';
+	$_POST['db_pass'] = $_POST['db_pass'] ?? '';
+	$_POST['db_prefix'] = $_POST['db_prefix'] ?? '';
+
+	if ($db_type === 'mysql') {
+		if (empty($_POST['db_host'])) {
+			return ['warning' => "L'hôte MySQL est requis", 'payload' => null];
+		}
+		if (empty($_POST['db_user'])) {
+			return ['warning' => "L'utilisateur MySQL est requis", 'payload' => null];
+		}
+		if (empty($_POST['db_name'])) {
+			return ['warning' => 'Le nom de la base de données MySQL est requis', 'payload' => null];
+		}
+	} elseif ($db_type === 'sqlite') {
+		if (empty($_POST['db_name'])) {
+			$_POST['db_name'] = 'db-' . substr(md5(uniqid('', true)), 0, 6) . '.sqlite';
+		}
+		$_POST['db_prefix'] = '';
+	}
+
+	$payload = [$_POST['db_host'], $_POST['db_user'], $_POST['db_pass'], $_POST['db_name'], $_POST['db_prefix'], $_POST['db_type']];
+
+	try {
+		Db::Connect($_POST['db_host'], $_POST['db_user'], $_POST['db_pass'], $_POST['db_name'], $_POST['db_prefix']);
+		if (Db::TableExists('users')) {
+			return ['warning' => __('database.not_empty'), 'payload' => null];
+		}
+	} catch (Exception $e) {
+		return ['warning' => 'Erreur de connexion à la base de données: ' . $e->getMessage(), 'payload' => null];
+	}
+
+	return ['warning' => '', 'payload' => $payload];
+}
+
 Evo\Lang::setTranslator(
 	new Evo\Translator(post_e('language', 'french'), ['english'], ROOT_DIR . '/includes/languages', 'install')
 );
@@ -89,61 +144,33 @@ switch($cur_step) {
 		break;
 
 	case STEP_DATABASE:
-		
-		// Forcer une valeur par défaut si db_type n'est pas défini
-		if (!isset($_POST['db_type']) || empty($_POST['db_type'])) {
-			if (isset($_POST['db_type_backup']) && !empty($_POST['db_type_backup'])) {
-				$_POST['db_type'] = $_POST['db_type_backup'];
-			} else {
-				$_POST['db_type'] = 'sqlite';
-			}
-		}
-
-		$db_type = strtolower(trim($_POST['db_type']));
-
-		if (!isset($db_types[$db_type])) {
-			$warning = "Type de base de données invalide: " . $_POST['db_type'];
+		$next_step = STEP_CONFIG;
+		if ($from_step != STEP_DATABASE) {
 			break;
 		}
 
-		require_once '../includes/Database/db.'.$db_type.'.php';
-
-		// Validation des champs requis
-		if ($db_type === 'mysql') {
-			if (empty($_POST['db_host'])) {
-				$warning = "L'hôte MySQL est requis";
-				break;
-			}
-			if (empty($_POST['db_user'])) {
-				$warning = "L'utilisateur MySQL est requis";
-				break;
-			}
-			if (empty($_POST['db_name'])) {
-				$warning = "Le nom de la base de données MySQL est requis";
-				break;
-			}
-		} else if ($db_type === 'sqlite') {
-			if (empty($_POST['db_name'])) {
-				$warning = "Le nom de la base de données SQLite est requis (valeur reçue: '" . (isset($_POST['db_name']) ? $_POST['db_name'] : 'NOT SET') . "')";
-				break;
-			}
+		$result = process_database_step($db_types);
+		if ($result['warning']) {
+			$warning = $result['warning'];
+			break;
 		}
 
-		$payload = [$_POST['db_host'], $_POST['db_user'], $_POST['db_pass'], $_POST['db_name'], $_POST['db_prefix'], $_POST['db_type']];
-
-		try {
-			Db::Connect($_POST['db_host'], $_POST['db_user'], $_POST['db_pass'], $_POST['db_name'], $_POST['db_prefix']);
-			if (Db::TableExists('users')) {
-				$warning = __('database.not_empty');
-			}
-			$next_step = STEP_CONFIG;
-		} catch (Exception $e) {
-			$warning = "Erreur de connexion à la base de données: " . $e->getMessage();
-		}
+		$payload = $result['payload'];
+		$cur_step = STEP_CONFIG;
 		break;
 
 	case STEP_CONFIG:
-		
+		if ($from_step == STEP_DATABASE) {
+			$result = process_database_step($db_types);
+			if ($result['warning']) {
+				$warning = $result['warning'];
+				$cur_step = STEP_DATABASE;
+				$next_step = STEP_CONFIG;
+				break;
+			}
+			$payload = $result['payload'];
+			break;
+		}
 		if (isset($_POST['email'], $_POST['admin'], $_POST['admin_pass'], $_POST['url'], $_POST['name'], $_POST['payload'])) {
 			if (!preg_match('#https?://.+#', $_POST['url']))
 				$warning .= __('config.bad_url') . '<br>';
