@@ -79,6 +79,12 @@ abstract class Database
 	}
 
 
+	public static function escapeTableReference($table)
+	{
+		return '`' . str_replace('`', '``', self::GetTableName($table)) . '`';
+	}
+
+
 	public static function AddColumnIfNotExists($table_name, $col_name, $col_type, $primary = false, $auto_increment = false, $default = null)
 	{
 		$columns = (array)static::GetColumns($table_name, true);
@@ -142,7 +148,13 @@ abstract class Database
 	public static function Query($query, ...$args): PDOStatement
 	{
 		try {
-			$query = preg_replace('!([^a-z0-9])\{([_a-z0-9]+)\}([^a-z0-9]|$)!i', '$1' . self::$prefix . '$2$3', $query);
+			$query = preg_replace_callback(
+				'!([^a-z0-9])\{([_a-z0-9]+)\}([^a-z0-9]|$)!i',
+				function ($m) {
+					return $m[1] . self::escapeTableReference($m[2]) . $m[3];
+				},
+				$query
+			);
 
 			if ($args) {
 				if (is_array($args[0])) $args = $args[0]; // Db::Query("SQL", [':named' => params])
