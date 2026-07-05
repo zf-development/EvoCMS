@@ -4,6 +4,7 @@ services:
     ports:
       - "8080:80"
     volumes:
+      - config_data:/var/www/html/.persistent
       - upload_data:/var/www/html/upload
       - logs_data:/var/www/html/logs
       - backups_data:/var/www/html/backups
@@ -30,6 +31,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  config_data:
   upload_data:
   logs_data:
   backups_data:
